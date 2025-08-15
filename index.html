@@ -1,130 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Vibe DApp</title>
-  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; background: #111; color: #fff; padding: 20px; }
-    button { padding: 10px; margin-top: 10px; cursor: pointer; }
-    input { padding: 8px; width: 300px; margin-top: 10px; }
-    #status { margin-top: 15px; color: yellow; }
-  </style>
+<meta charset="UTF-8">
+<title>Shardeum Vibes Chat</title>
+<style>
+    body { font-family: Arial, sans-serif; background: #121212; color: white; margin: 0; padding: 0; }
+    .chat-container { width: 400px; margin: 40px auto; background: #1e1e1e; border-radius: 10px; padding: 20px; }
+    .messages { height: 300px; overflow-y: scroll; border: 1px solid #333; padding: 10px; margin-bottom: 10px; }
+    .message { margin-bottom: 8px; }
+    .timestamp { color: gray; font-size: 0.8em; }
+    input, button { padding: 10px; border: none; border-radius: 5px; }
+    input { width: 70%; }
+    button { background: #ff9800; color: white; cursor: pointer; }
+</style>
 </head>
 <body>
-  <h1>Vibe Controller</h1>
-  <button id="connectButton">Connect Wallet</button>
-  <div id="walletAddress"></div>
 
-  <h3>Current Vibe:</h3>
-  <div id="currentVibe">Not loaded</div>
+<div class="chat-container">
+    <h2>Shardeum Vibes Chat</h2>
+    <div id="messages" class="messages"></div>
+    <input type="text" id="messageInput" placeholder="Type a message">
+    <button onclick="sendMessage()">Send</button>
+    <br><br>
+    <button onclick="connectWallet()">Connect Wallet</button>
+</div>
 
-  <h3>Set New Vibe:</h3>
-  <input type="text" id="vibeInput" placeholder="Enter new vibe...">
-  <button id="setVibeButton">Set Vibe</button>
-
-  <div id="status"></div>
-
-  <script>
-    const contractABI = [
-      {
-        "inputs": [{"internalType": "string","name": "_vibe","type": "string"}],
-        "name": "setVibe",
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<script>
+const CONTRACT_ADDRESS = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
+const ABI = [
+    // Add your actual contract ABI here
+    {
+        "inputs": [],
+        "name": "getLastMessages",
+        "outputs": [
+            {
+                "components": [
+                    { "internalType": "address", "name": "sender", "type": "address" },
+                    { "internalType": "string", "name": "text", "type": "string" },
+                    { "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+                ],
+                "internalType": "struct Message[]",
+                "name": "",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "internalType": "string", "name": "_text", "type": "string" }],
+        "name": "sendMessage",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
-      },
-      {
-        "anonymous": false,
-        "inputs": [
-          {"indexed": true,"internalType": "address","name": "user","type": "address"},
-          {"indexed": false,"internalType": "string","name": "newVibe","type": "string"}
-        ],
-        "name": "VibeChanged",
-        "type": "event"
-      },
-      {
-        "inputs": [],
-        "name": "getVibe",
-        "outputs": [{"internalType": "string","name": "","type": "string"}],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "vibe",
-        "outputs": [{"internalType": "string","name": "","type": "string"}],
-        "stateMutability": "view",
-        "type": "function"
-      }
-    ];
+    }
+];
 
-    // Replace with your deployed contract address
-    const contractAddress = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
+let provider;
+let signer;
+let contract;
 
-    let web3;
-    let contract;
-    let userAccount;
+// Load messages for all visitors
+async function loadMessages() {
+    try {
+        const readProvider = new ethers.providers.JsonRpcProvider("https://api-unstablenet.shardeum.org");
+        const readContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, readProvider);
+        const messages = await readContract.getLastMessages();
 
-    async function connectWallet() {
-      if (window.ethereum) {
+        const messagesDiv = document.getElementById("messages");
+        messagesDiv.innerHTML = "";
+
+        messages.forEach(msg => {
+            const date = new Date(msg.timestamp * 1000);
+            messagesDiv.innerHTML += `<div class="message"><b>${msg.sender}</b>: ${msg.text} <div class="timestamp">${date.toLocaleString()}</div></div>`;
+        });
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    } catch (err) {
+        console.error("Error loading messages:", err);
+    }
+}
+
+async function connectWallet() {
+    if (window.ethereum) {
         try {
-          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-          userAccount = accounts[0];
-          document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
-          web3 = new Web3(window.ethereum);
-          contract = new web3.eth.Contract(contractABI, contractAddress);
-          loadVibe();
-        } catch (error) {
-          console.error(error);
+            await window.ethereum.request({ method: "eth_requestAccounts" });
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            signer = provider.getSigner();
+            contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+            alert("Wallet connected!");
+        } catch (err) {
+            console.error(err);
         }
-      } else {
-        alert("MetaMask not detected. Please install MetaMask.");
-      }
+    } else {
+        alert("Please install MetaMask!");
     }
+}
 
-    async function loadVibe() {
-      try {
-        const vibe = await contract.methods.getVibe().call();
-        document.getElementById("currentVibe").innerText = vibe || "No vibe set yet";
-      } catch (err) {
-        console.error("Error loading vibe:", err);
-      }
-    }
-
-    async function setVibe() {
-      const newVibe = document.getElementById("vibeInput").value;
-      if (!newVibe) {
-        alert("Please enter a vibe");
+async function sendMessage() {
+    if (!signer) {
+        alert("Please connect wallet first.");
         return;
-      }
-      document.getElementById("status").innerText = "Sending transaction...";
-      try {
-        await contract.methods.setVibe(newVibe).send({ from: userAccount });
-        document.getElementById("status").innerText = "Vibe updated!";
-        loadVibe();
-      } catch (err) {
-        console.error(err);
-        document.getElementById("status").innerText = "Transaction failed.";
-      }
     }
+    const text = document.getElementById("messageInput").value;
+    if (!text) return;
 
-    document.getElementById("connectButton").addEventListener("click", connectWallet);
-    document.getElementById("setVibeButton").addEventListener("click", setVibe);
+    try {
+        const tx = await contract.sendMessage(text);
+        await tx.wait();
+        document.getElementById("messageInput").value = "";
+        loadMessages(); // refresh chat
+    } catch (err) {
+        console.error("Error sending message:", err);
+    }
+}
 
-    // Auto-reconnect if already connected
-    window.addEventListener('load', async () => {
-      if (window.ethereum) {
-        web3 = new Web3(window.ethereum);
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-          userAccount = accounts[0];
-          document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
-          contract = new web3.eth.Contract(contractABI, contractAddress);
-          loadVibe();
-        }
-      }
-    });
-  </script>
+// Auto-load messages every 10 seconds
+loadMessages();
+setInterval(loadMessages, 10000);
+</script>
 </body>
 </html>
