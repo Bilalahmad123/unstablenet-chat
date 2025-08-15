@@ -1,66 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>UnstableNet Chat</title>
+  <meta charset="UTF-8">
+  <title>Vibe DApp</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #111; color: #fff; padding: 20px; }
+    button { padding: 10px; margin-top: 10px; cursor: pointer; }
+    input { padding: 8px; width: 300px; margin-top: 10px; }
+    #status { margin-top: 15px; color: yellow; }
+  </style>
 </head>
 <body>
-  <h1>UnstableNet Chat</h1>
-  <button id="connectWallet">Connect Wallet</button>
+  <h1>Vibe Controller</h1>
+  <button id="connectButton">Connect Wallet</button>
+  <div id="walletAddress"></div>
+
+  <h3>Current Vibe:</h3>
+  <div id="currentVibe">Not loaded</div>
+
+  <h3>Set New Vibe:</h3>
+  <input type="text" id="vibeInput" placeholder="Enter new vibe...">
+  <button id="setVibeButton">Set Vibe</button>
+
   <div id="status"></div>
 
-  <hr>
-
-  <h2>Contract Interaction</h2>
-  <button id="callContract">Call Contract Method</button>
-  <div id="contractResult"></div>
-
   <script>
-    let web3;
-    let userAccount;
-
-    // ABI and contract address from your original script
-    const contractABI = [ 
-      /* your contract ABI array here */
+    const contractABI = [
+      {
+        "inputs": [{"internalType": "string","name": "_vibe","type": "string"}],
+        "name": "setVibe",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {"indexed": true,"internalType": "address","name": "user","type": "address"},
+          {"indexed": false,"internalType": "string","name": "newVibe","type": "string"}
+        ],
+        "name": "VibeChanged",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "getVibe",
+        "outputs": [{"internalType": "string","name": "","type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "vibe",
+        "outputs": [{"internalType": "string","name": "","type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+      }
     ];
 
-    const contractAddress = "0xYourContractAddressHere";
-    let contract;
+    // Replace with your deployed contract address
+    const contractAddress = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
 
-    // Connect wallet
-    document.getElementById("connectWallet").addEventListener("click", async () => {
-      if (typeof window.ethereum !== "undefined") {
+    let web3;
+    let contract;
+    let userAccount;
+
+    async function connectWallet() {
+      if (window.ethereum) {
         try {
           const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
           userAccount = accounts[0];
-          document.getElementById("status").innerText = `Connected: ${userAccount}`;
-
-          // Init web3
+          document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
           web3 = new Web3(window.ethereum);
-
-          // Init contract
           contract = new web3.eth.Contract(contractABI, contractAddress);
-        } catch (err) {
-          console.error("User denied account access", err);
+          loadVibe();
+        } catch (error) {
+          console.error(error);
         }
       } else {
         alert("MetaMask not detected. Please install MetaMask.");
       }
-    });
+    }
 
-    // Example contract method call
-    document.getElementById("callContract").addEventListener("click", async () => {
-      if (!contract) {
-        alert("Please connect your wallet first.");
+    async function loadVibe() {
+      try {
+        const vibe = await contract.methods.getVibe().call();
+        document.getElementById("currentVibe").innerText = vibe || "No vibe set yet";
+      } catch (err) {
+        console.error("Error loading vibe:", err);
+      }
+    }
+
+    async function setVibe() {
+      const newVibe = document.getElementById("vibeInput").value;
+      if (!newVibe) {
+        alert("Please enter a vibe");
         return;
       }
+      document.getElementById("status").innerText = "Sending transaction...";
       try {
-        const result = await contract.methods.myMethodName().call(); // Replace myMethodName with your method
-        document.getElementById("contractResult").innerText = `Result: ${result}`;
+        await contract.methods.setVibe(newVibe).send({ from: userAccount });
+        document.getElementById("status").innerText = "Vibe updated!";
+        loadVibe();
       } catch (err) {
         console.error(err);
-        document.getElementById("contractResult").innerText = "Error calling contract.";
+        document.getElementById("status").innerText = "Transaction failed.";
+      }
+    }
+
+    document.getElementById("connectButton").addEventListener("click", connectWallet);
+    document.getElementById("setVibeButton").addEventListener("click", setVibe);
+
+    // Auto-reconnect if already connected
+    window.addEventListener('load', async () => {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          userAccount = accounts[0];
+          document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
+          contract = new web3.eth.Contract(contractABI, contractAddress);
+          loadVibe();
+        }
       }
     });
   </script>
