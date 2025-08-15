@@ -1,104 +1,134 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>Vibes DApp</title>
-    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-    <style>
-        body { font-family: Arial; padding: 20px; background: #f4f4f4; }
-        #connectButton { padding: 10px 15px; background: #4CAF50; color: white; border: none; cursor: pointer; }
-        #connectButton:disabled { background: gray; }
-        .vibe-list { margin-top: 20px; padding: 10px; background: white; border-radius: 5px; }
-        .vibe-item { border-bottom: 1px solid #ddd; padding: 5px 0; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Vibes DApp</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    button { padding: 10px; margin: 5px; }
+    #vibesList { margin-top: 20px; }
+    .vibe-item { border-bottom: 1px solid #ccc; padding: 5px 0; }
+    .addr { font-size: 0.85em; color: gray; }
+  </style>
 </head>
 <body>
-    <h1>🌊 Vibes DApp</h1>
-    <button id="connectButton">Connect Wallet</button>
+  <h1>Send & View Vibes</h1>
+  
+  <button id="connectButton">Connect Wallet</button><br><br>
+  
+  <input type="text" id="vibeInput" placeholder="Type your vibe..." style="width:300px;" />
+  <button id="sendVibeButton">Send Vibe</button>
+  
+  <h2>Latest Vibes</h2>
+  <div id="vibesList">Loading vibes...</div>
 
-    <div style="margin-top:20px;">
-        <input id="vibeInput" placeholder="Enter your vibe" style="padding:5px; width: 200px;">
-        <button id="sendVibeButton">Send Vibe</button>
-    </div>
+  <script>
+    const contractAddress = "YOUR_CONTRACT_ADDRESS"; // put your deployed address here
+    const contractABI = [
+      {
+        "inputs": [{ "internalType": "string", "name": "_vibe", "type": "string" }],
+        "name": "setVibe",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
+          { "indexed": false, "internalType": "string", "name": "vibe", "type": "string" }
+        ],
+        "name": "VibeChanged",
+        "type": "event"
+      }
+    ];
+    
+    let web3;
+    let contract;
+    let accounts = [];
 
-    <div id="status" style="margin-top:10px; color:blue;"></div>
+    async function connectWallet() {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        contract = new web3.eth.Contract(contractABI, contractAddress);
+        document.getElementById("connectButton").innerText = "Connected: " + accounts[0].slice(0,6) + "..." + accounts[0].slice(-4);
+        loadPastVibes();
+        listenForNewVibes();
+      } else {
+        alert("Please install MetaMask!");
+      }
+    }
 
-    <h2>Past Vibes</h2>
-    <div class="vibe-list" id="vibesList">Loading vibes...</div>
+    async function sendVibe() {
+      const vibeText = document.getElementById("vibeInput").value.trim();
+      if (!vibeText) return alert("Please enter a vibe");
+      await contract.methods.setVibe(vibeText).send({ from: accounts[0] });
+      document.getElementById("vibeInput").value = "";
+    }
 
-    <script>
-        const contractAddress = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
-        const contractABI = [
-            { "inputs": [ { "internalType": "string", "name": "_vibe", "type": "string" } ], "name": "setVibe", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-            { "anonymous": false, "inputs": [ { "indexed": true, "internalType": "address", "name": "user", "type": "address" }, { "indexed": false, "internalType": "string", "name": "newVibe", "type": "string" } ], "name": "VibeChanged", "type": "event" },
-            { "inputs": [], "name": "getVibe", "outputs": [ { "internalType": "string", "name": "", "type": "string" } ], "stateMutability": "view", "type": "function" },
-            { "inputs": [], "name": "vibe", "outputs": [ { "internalType": "string", "name": "", "type": "string" } ], "stateMutability": "view", "type": "function" }
-        ];
+    async function loadPastVibes() {
+      document.getElementById("vibesList").innerHTML = "Loading vibes...";
+      try {
+        const latestBlock = await web3.eth.getBlockNumber();
+        const events = await contract.getPastEvents("VibeChanged", {
+          fromBlock: latestBlock - 5000, // last ~5000 blocks
+          toBlock: "latest"
+        });
+        
+        let vibes = events.map(e => ({
+          user: e.returnValues.user,
+          vibe: e.returnValues.vibe,
+          blockNumber: e.blockNumber
+        }));
 
-        let provider, signer, contract;
+        vibes.sort((a, b) => b.blockNumber - a.blockNumber);
+        vibes = vibes.slice(0, 20);
+        
+        renderVibes(vibes);
+      } catch (err) {
+        console.error(err);
+        document.getElementById("vibesList").innerHTML = "Error loading vibes.";
+      }
+    }
 
-        document.getElementById("connectButton").onclick = async () => {
-            try {
-                if (!window.ethereum) {
-                    alert("MetaMask not found");
-                    return;
-                }
-                provider = new ethers.providers.Web3Provider(window.ethereum);
-                await provider.send("eth_requestAccounts", []);
-                signer = provider.getSigner();
-                const address = await signer.getAddress();
-                document.getElementById("connectButton").innerText = "Connected: " + address.slice(0,6) + "..." + address.slice(-4);
-                contract = new ethers.Contract(contractAddress, contractABI, signer);
-                loadVibes();
-            } catch (err) {
-                console.error(err);
-                alert("Connection failed");
-            }
-        };
+    function listenForNewVibes() {
+      contract.events.VibeChanged({ fromBlock: "latest" })
+        .on("data", event => {
+          const newVibe = {
+            user: event.returnValues.user,
+            vibe: event.returnValues.vibe
+          };
+          prependVibe(newVibe);
+        })
+        .on("error", console.error);
+    }
 
-        async function loadVibes() {
-            try {
-                document.getElementById("vibesList").innerHTML = "Loading vibes...";
-                const contractReadOnly = new ethers.Contract(contractAddress, contractABI, provider);
-                const currentBlock = await provider.getBlockNumber();
-                const fromBlock = currentBlock - 50000; // last 50k blocks
-                const events = await contractReadOnly.queryFilter("VibeChanged", fromBlock, "latest");
+    function renderVibes(vibes) {
+      const container = document.getElementById("vibesList");
+      container.innerHTML = "";
+      vibes.forEach(v => {
+        const div = document.createElement("div");
+        div.className = "vibe-item";
+        div.innerHTML = `<div>${v.vibe}</div><div class="addr">${v.user}</div>`;
+        container.appendChild(div);
+      });
+    }
 
-                if (events.length === 0) {
-                    document.getElementById("vibesList").innerHTML = "No vibes yet.";
-                    return;
-                }
+    function prependVibe(v) {
+      const container = document.getElementById("vibesList");
+      const div = document.createElement("div");
+      div.className = "vibe-item";
+      div.innerHTML = `<div>${v.vibe}</div><div class="addr">${v.user}</div>`;
+      container.prepend(div);
+      while (container.children.length > 20) {
+        container.removeChild(container.lastChild);
+      }
+    }
 
-                let html = "";
-                events.reverse().forEach(ev => {
-                    html += `<div class="vibe-item"><b>${ev.args.user}</b>: ${ev.args.newVibe}</div>`;
-                });
-                document.getElementById("vibesList").innerHTML = html;
-            } catch (err) {
-                console.error(err);
-                document.getElementById("vibesList").innerHTML = "Error loading vibes.";
-            }
-        }
-
-        document.getElementById("sendVibeButton").onclick = async () => {
-            if (!contract) {
-                alert("Connect wallet first");
-                return;
-            }
-            const vibeText = document.getElementById("vibeInput").value.trim();
-            if (!vibeText) return alert("Enter a vibe");
-            try {
-                document.getElementById("status").innerText = "Sending transaction...";
-                const tx = await contract.setVibe(vibeText);
-                await tx.wait();
-                document.getElementById("status").innerText = "Vibe sent!";
-                document.getElementById("vibeInput").value = "";
-                loadVibes();
-            } catch (err) {
-                console.error(err);
-                document.getElementById("status").innerText = "Failed to send vibe";
-            }
-        };
-    </script>
+    document.getElementById("connectButton").onclick = connectWallet;
+    document.getElementById("sendVibeButton").onclick = sendVibe;
+  </script>
 </body>
 </html>
