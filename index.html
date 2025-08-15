@@ -1,290 +1,174 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vibecoding — Shardeum Unstablenet</title>
+  <meta charset="UTF-8">
+  <title>Vibes DApp</title>
   <style>
-    *{box-sizing:border-box} body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#0f1221;color:#eef1ff}
-    .wrap{max-width:860px;margin:0 auto;padding:24px}
-    .card{background:#141835;border:1px solid #2b2f54;border-radius:16px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-    h1{margin:0 0 6px;font-size:28px}
-    p.sub{margin:0 0 16px;color:#b6b8d6}
-    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0}
-    button{cursor:pointer;border:1px solid #40458a;background:#1b2061;color:#fff;padding:10px 14px;border-radius:12px;font-weight:600}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    input[type="text"]{flex:1;min-width:240px;background:#0e1130;border:1px solid #2b2f54;color:#fff;padding:10px 12px;border-radius:12px}
-    .pill{display:inline-block;padding:6px 10px;border:1px solid #2b2f54;border-radius:999px;background:#0e1130;font-size:13px}
-    .muted{color:#9ea2c9;font-size:14px}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
-    .status{margin-top:8px;min-height:20px;font-size:14px;color:#c6c9ff}
-    .list{margin-top:16px;background:#0e1130;border:1px solid #2b2f54;border-radius:12px;max-height:420px;overflow:auto}
-    .item{display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid #1e2350}
-    .item:last-child{border-bottom:none}
-    .addr{font-size:12px;color:#b6b8d6}
-    .vibe{font-size:15px;word-break:break-word}
-    .time{margin-left:auto;font-size:12px;color:#9ea2c9;white-space:nowrap}
-    a{color:#aeb4ff;text-decoration:none} a:hover{text-decoration:underline}
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8f8f8;
+      text-align: center;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    input {
+      padding: 10px;
+      width: 300px;
+      font-size: 16px;
+    }
+    #vibesList {
+      max-width: 500px;
+      margin: 20px auto;
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .vibe-item {
+      border-bottom: 1px solid #ddd;
+      padding: 8px 0;
+      text-align: left;
+    }
+    .vibe-item:last-child {
+      border-bottom: none;
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h1>🌊 Vibecoding</h1>
-      <p class="sub">See the latest vibes on-chain (Shardeum Unstablenet). Anyone can read; connect to set your vibe.</p>
 
-      <div class="row">
-        <button id="connectBtn">Connect Wallet</button>
-        <span id="accountPill" class="pill">Not connected</span>
-        <span id="networkPill" class="pill">Network: Unknown</span>
-      </div>
+  <h1>🌐 Vibes DApp</h1>
+  <button id="connectButton">Connect Wallet</button>
+  <div id="walletAddress"></div>
 
-      <div class="row">
-        <div style="flex:1">
-          <div class="muted">Current Global Vibe</div>
-          <div id="currentVibe" class="mono" style="font-size:16px; padding-top:6px;">(loading...)</div>
-        </div>
-      </div>
-
-      <div class="row">
-        <input id="vibeInput" type="text" placeholder="Enter your vibe..." maxlength="200" />
-        <button id="setVibeBtn" disabled>Set Vibe</button>
-      </div>
-
-      <div id="status" class="status"></div>
-
-      <div class="muted" style="margin-top:12px;">
-        Contract: <span class="mono">0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c</span>
-      </div>
-
-      <div style="margin-top:20px">
-        <div class="muted">Latest 20 vibes (live)</div>
-        <div id="vibeList" class="list"></div>
-      </div>
-    </div>
+  <div style="margin-top: 20px;">
+    <input type="text" id="vibeInput" placeholder="Enter your vibe..." />
+    <button id="setVibeButton">Send Vibe</button>
   </div>
 
-  <!-- Ethers.js v5 -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
-  <script>
-    // ===== Config =====
-    const CONTRACT_ADDRESS = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
-    const SHARDEUM_RPC = "https://api-unstablenet.shardeum.org";
-    const SHARDEUM_CHAIN_ID_HEX = "0x1f90"; // 8080
-    const SHARDEUM_PARAMS = {
-      chainId: SHARDEUM_CHAIN_ID_HEX,
-      chainName: "Shardeum Unstablenet",
-      nativeCurrency: { name: "Shardeum", symbol: "SHM", decimals: 18 },
-      rpcUrls: [SHARDEUM_RPC],
-      blockExplorerUrls: [] // add if you have one
-    };
+  <h2>Latest Vibes</h2>
+  <div id="vibesList">Loading...</div>
 
-    // Your ABI (with event VibeChanged and the two methods)
-    const ABI = [
-      {"inputs":[{"internalType":"string","name":"_vibe","type":"string"}],"name":"setVibe","outputs":[],"stateMutability":"nonpayable","type":"function"},
-      {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"string","name":"newVibe","type":"string"}],"name":"VibeChanged","type":"event"},
-      {"inputs":[],"name":"getVibe","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"vibe","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"}
+  <!-- Ethers.js -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers/dist/ethers.min.js"></script>
+  <script>
+    const contractAddress = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
+    const contractABI = [
+      {
+        "inputs": [{"internalType":"string","name":"_vibe","type":"string"}],
+        "name":"setVibe",
+        "outputs":[],
+        "stateMutability":"nonpayable",
+        "type":"function"
+      },
+      {
+        "anonymous":false,
+        "inputs":[
+          {"indexed":true,"internalType":"address","name":"user","type":"address"},
+          {"indexed":false,"internalType":"string","name":"newVibe","type":"string"}
+        ],
+        "name":"VibeChanged",
+        "type":"event"
+      },
+      {
+        "inputs":[],
+        "name":"getVibe",
+        "outputs":[{"internalType":"string","name":"","type":"string"}],
+        "stateMutability":"view",
+        "type":"function"
+      },
+      {
+        "inputs":[],
+        "name":"vibe",
+        "outputs":[{"internalType":"string","name":"","type":"string"}],
+        "stateMutability":"view",
+        "type":"function"
+      }
     ];
 
-    // ===== DOM =====
-    const connectBtn = document.getElementById("connectBtn");
-    const setVibeBtn = document.getElementById("setVibeBtn");
-    const vibeInput  = document.getElementById("vibeInput");
-    const currentVibeEl = document.getElementById("currentVibe");
-    const statusEl = document.getElementById("status");
-    const accountPill = document.getElementById("accountPill");
-    const networkPill = document.getElementById("networkPill");
-    const vibeListEl = document.getElementById("vibeList");
-
-    // ===== Providers & Contract handles =====
-    const readProvider = new ethers.providers.JsonRpcProvider(SHARDEUM_RPC); // works without wallet
-    const readContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, readProvider);
-
-    let web3Provider; // injected (Metamask) provider
+    let provider;
     let signer;
-    let writeContract;
+    let contract;
 
-    // ===== Utils =====
-    const short = (addr) => addr ? addr.slice(0, 6) + "…" + addr.slice(-4) : "";
-    const showStatus = (msg) => statusEl.textContent = msg || "";
-
-    function renderVibes(items) {
-      vibeListEl.innerHTML = items.map(it => {
-        const when = new Date(it.ts * 1000).toLocaleString();
-        return `
-          <div class="item">
-            <div>
-              <div class="addr mono">${it.user}</div>
-              <div class="vibe">${escapeHtml(it.text)}</div>
-            </div>
-            <div class="time">${when}</div>
-          </div>
-        `;
-      }).join("");
-      vibeListEl.scrollTop = vibeListEl.scrollHeight;
-    }
-
-    function escapeHtml(s){
-      return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-    }
-
-    // Fetch latest N VibeChanged events (no contract storage needed)
-    async function fetchLatestVibes(limit = 20) {
-      const latestBlock = await readProvider.getBlockNumber();
-
-      // Start with a window, then expand until we have at least `limit` events or hit block 0
-      let from = Math.max(latestBlock - 200_000, 0);
-      let events = await readContract.queryFilter(readContract.filters.VibeChanged(), from, latestBlock);
-
-      while (events.length < limit && from > 0) {
-        const prevFrom = Math.max(from - 400_000, 0);
-        const more = await readContract.queryFilter(readContract.filters.VibeChanged(), prevFrom, from - 1);
-        events = more.concat(events);
-        from = prevFrom;
-      }
-
-      const last = events.slice(-limit);
-
-      // Get timestamps for display
-      const enriched = await Promise.all(last.map(async (ev) => {
-        const blk = await readProvider.getBlock(ev.blockNumber);
-        return {
-          user: ev.args.user,
-          text: ev.args.newVibe,
-          ts: blk.timestamp,
-          tx: ev.transactionHash
-        };
-      }));
-
-      renderVibes(enriched);
-    }
-
-    async function loadCurrentVibe(){
-      try {
-        currentVibeEl.textContent = "Loading…";
-        const v = await readContract.getVibe();
-        currentVibeEl.textContent = v || "(no vibe set)";
-      } catch (e) {
-        currentVibeEl.textContent = "(error)";
-      }
-    }
-
-    // Live updates: listen to new events and push to top (keep 20)
-    function subscribeLive() {
-      readContract.on("VibeChanged", async (user, newVibe, event) => {
-        const blk = await readProvider.getBlock(event.blockNumber);
-        // Prepend newest
-        const card = vibeListEl.firstElementChild;
-        const html = `
-          <div class="item">
-            <div>
-              <div class="addr mono">${user}</div>
-              <div class="vibe">${escapeHtml(newVibe)}</div>
-            </div>
-            <div class="time">${new Date(blk.timestamp * 1000).toLocaleString()}</div>
-          </div>
-        `;
-        vibeListEl.insertAdjacentHTML("afterbegin", html);
-        // Trim to 20
-        while (vibeListEl.children.length > 20) {
-          vibeListEl.removeChild(vibeListEl.lastElementChild);
-        }
-        // Also refresh the "current vibe"
-        currentVibeEl.textContent = newVibe;
-      });
-    }
-
-    // ===== Wallet connect / write actions =====
-    async function ensureNetwork() {
-      const chainId = await window.ethereum.request({ method: "eth_chainId" });
-      if (chainId !== SHARDEUM_CHAIN_ID_HEX) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: SHARDEUM_CHAIN_ID_HEX }]
-          });
-        } catch (switchErr) {
-          if (switchErr.code === 4902) {
-            await window.ethereum.request({
-              method: "wallet_addEthereumChain",
-              params: [SHARDEUM_PARAMS]
-            });
-          } else {
-            throw switchErr;
-          }
-        }
-      }
-    }
+    const connectButton = document.getElementById('connectButton');
+    const walletAddressDiv = document.getElementById('walletAddress');
+    const setVibeButton = document.getElementById('setVibeButton');
+    const vibeInput = document.getElementById('vibeInput');
+    const vibesList = document.getElementById('vibesList');
 
     async function connectWallet() {
-      if (typeof window.ethereum === "undefined") {
-        alert("No Web3 wallet detected. Please install MetaMask (or a compatible wallet).");
-        window.open("https://metamask.io/download.html","_blank");
-        return;
-      }
-      connectBtn.disabled = true;
-      showStatus("Connecting wallet…");
-
-      try {
-        await ensureNetwork();
-        web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-        await web3Provider.send("eth_requestAccounts", []);
-        signer = web3Provider.getSigner();
-        writeContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-
-        const addr = await signer.getAddress();
-        accountPill.textContent = short(addr);
-
-        const net = await web3Provider.getNetwork();
-        networkPill.textContent = "Network: " + (net?.chainId ?? "Unknown");
-
-        setVibeBtn.disabled = false;
-        showStatus("Connected.");
-      } catch (e) {
-        console.error(e);
-        showStatus(e?.message || "Failed to connect.");
-      } finally {
-        connectBtn.disabled = false;
+      if (window.ethereum) {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        const address = await signer.getAddress();
+        walletAddressDiv.innerText = `Connected: ${address}`;
+        contract = new ethers.Contract(contractAddress, contractABI, signer);
+        loadVibes();
+        listenForNewVibes();
+      } else {
+        alert("Please install MetaMask!");
       }
     }
 
     async function setVibe() {
-      const v = (vibeInput.value || "").trim();
-      if (!v) { alert("Please enter a vibe first."); return; }
-      if (!writeContract) { alert("Connect your wallet to set a vibe."); return; }
-
+      const vibe = vibeInput.value.trim();
+      if (!vibe) return alert("Enter a vibe!");
       try {
-        setVibeBtn.disabled = true;
-        showStatus("Sending transaction…");
-        const tx = await writeContract.setVibe(v);
-        showStatus("Submitted. Waiting for confirmation… Tx: " + tx.hash);
+        const tx = await contract.setVibe(vibe);
         await tx.wait();
-        showStatus("Vibe updated on-chain.");
         vibeInput.value = "";
-        // No need to manually refresh list; live subscription updates it.
-      } catch (e) {
-        console.error(e);
-        showStatus(e?.data?.message || e?.message || "Transaction failed.");
-      } finally {
-        setVibeBtn.disabled = false;
+      } catch (err) {
+        console.error(err);
+        alert("Transaction failed!");
       }
     }
 
-    // ===== Wire up UI and boot =====
-    connectBtn.addEventListener("click", connectWallet);
-    setVibeBtn.addEventListener("click", setVibe);
-
-    if (window.ethereum) {
-      window.ethereum.on("accountsChanged", () => window.location.reload());
-      window.ethereum.on("chainChanged", () => window.location.reload());
+    async function loadVibes() {
+      vibesList.innerHTML = "Loading...";
+      try {
+        const blockNumber = await provider.getBlockNumber();
+        const events = await contract.queryFilter(
+          contract.filters.VibeChanged(),
+          blockNumber - 5000, // search last ~5000 blocks
+          "latest"
+        );
+        const latest = events.slice(-20).reverse();
+        displayVibes(latest);
+      } catch (err) {
+        console.error(err);
+        vibesList.innerHTML = "Error loading vibes.";
+      }
     }
 
-    // First paint: everyone can read without wallet
-    (async function boot(){
-      await Promise.all([loadCurrentVibe(), fetchLatestVibes(20)]);
-      subscribeLive();
-    })();
+    function displayVibes(events) {
+      vibesList.innerHTML = "";
+      events.forEach(ev => {
+        const div = document.createElement("div");
+        div.className = "vibe-item";
+        div.innerHTML = `<strong>${ev.args.user}</strong>: ${ev.args.newVibe}`;
+        vibesList.appendChild(div);
+      });
+    }
+
+    function listenForNewVibes() {
+      contract.on("VibeChanged", (user, newVibe) => {
+        const div = document.createElement("div");
+        div.className = "vibe-item";
+        div.innerHTML = `<strong>${user}</strong>: ${newVibe}`;
+        vibesList.prepend(div);
+        while (vibesList.childElementCount > 20) {
+          vibesList.removeChild(vibesList.lastChild);
+        }
+      });
+    }
+
+    connectButton.addEventListener('click', connectWallet);
+    setVibeButton.addEventListener('click', setVibe);
   </script>
 </body>
 </html>
