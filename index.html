@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vibecoding on Shardeum Unstablenet</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #0f1221; color: #eef1ff; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 24px; }
+    .card { background: #141835; border: 1px solid #2b2f54; border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    p.sub { margin: 0 0 16px; color: #b6b8d6; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+    button { cursor: pointer; border: 1px solid #40458a; background: #1b2061; color: #fff; padding: 10px 14px; border-radius: 12px; font-weight: 600; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    input[type="text"] { flex: 1; min-width: 240px; background: #0e1130; border: 1px solid #2b2f54; color: #fff; padding: 10px 12px; border-radius: 12px; }
+    .muted { color: #9ea2c9; font-size: 14px; }
+    .pill { display:inline-block; padding: 6px 10px; border:1px solid #2b2f54; border-radius: 999px; background:#0e1130; font-size: 13px; }
+    .status { margin-top: 8px; min-height: 20px; font-size: 14px; color: #c6c9ff; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    a { color: #aeb4ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>🌊 Vibecoding on Shardeum</h1>
+      <p class="sub">Set a global vibe string on-chain (Shardeum Unstablenet).</p>
+
+      <div class="row">
+        <button id="connectBtn">Connect Wallet</button>
+        <span id="accountPill" class="pill">Not connected</span>
+        <span id="networkPill" class="pill">Network: Unknown</span>
+      </div>
+
+      <div class="row">
+        <div>
+          <div class="muted">Current Vibe</div>
+          <div id="currentVibe" class="mono" style="font-size:16px; padding-top:6px;">(loading...)</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <input id="vibeInput" type="text" placeholder="Enter your vibe..." />
+        <button id="setVibeBtn" disabled>Set Vibe</button>
+      </div>
+
+      <div id="status" class="status"></div>
+      <div class="muted" style="margin-top:12px;">
+        Contract: <span class="mono">0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ethers v5 -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+  <script>
+    // === Configuration ===
+    const CONTRACT_ADDRESS = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
+    const SHARDEUM_CHAIN_ID_DEC = 8080;
+    const SHARDEUM_CHAIN_ID_HEX = "0x1f90"; // 8080 in hex
+    const SHARDEUM_PARAMS = {
+      chainId: SHARDEUM_CHAIN_ID_HEX,
+      chainName: "Shardeum Unstablenet",
+      nativeCurrency: { name: "Shardeum", symbol: "SHM", decimals: 18 },
+      rpcUrls: ["https://api-unstablenet.shardeum.org"],
+      blockExplorerUrls: [] // If you get an explorer URL, add here
+    };
+
+    const ABI = [
+      "function setVibe(string _vibe) public",
+      "function getVibe() public view returns (string)"
+    ];
+
+    const connectBtn = document.getElementById("connectBtn");
+    const setVibeBtn  = document.getElementById("setVibeBtn");
+    const vibeInput   = document.getElementById("vibeInput");
+    const currentVibe = document.getElementById("currentVibe");
+    const statusEl    = document.getElementById("status");
+    const accountPill = document.getElementById("accountPill");
+    const networkPill = document.getElementById("networkPill");
+
+    let provider, signer, contract;
+
+    function showStatus(msg) {
+      statusEl.textContent = msg || "";
+    }
+
+    function short(addr) {
+      if (!addr) return "Not connected";
+      return addr.slice(0, 6) + "…" + addr.slice(-4);
+    }
+
+    async function ensureShardeum() {
+      const chainId = await ethereum.request({ method: "eth_chainId" });
+      if (chainId !== SHARDEUM_CHAIN_ID_HEX) {
+        try {
+          await ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: SHARDEUM_CHAIN_ID_HEX }]
+          });
+        } catch (switchErr) {
+          if (switchErr.code === 4902) {
+            await ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [SHARDEUM_PARAMS]
+            });
+          } else {
+            throw switchErr;
+          }
+        }
+      }
+    }
+
+    async function connect() {
+      try {
+        if (!window.ethereum) {
+          alert("MetaMask not detected.");
+          return;
+        }
+        connectBtn.disabled = true;
+        showStatus("Connecting wallet…");
+
+        await ensureShardeum();
+
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+
+        const addr = await signer.getAddress();
+        accountPill.textContent = short(addr);
+
+        const network = await provider.getNetwork();
+        networkPill.textContent = "Network: " + (network && network.chainId ? network.chainId : "Unknown");
+
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+        setVibeBtn.disabled = false;
+        await loadVibe();
+
+        showStatus("Connected.");
+      } catch (err) {
+        console.error(err);
+        showStatus(err.message || "Failed to connect.");
+      } finally {
+        connectBtn.disabled = false;
+      }
+    }
+
+    async function loadVibe() {
+      try {
+        currentVibe.textContent = "Loading…";
+        const vibe = await contract.getVibe();
+        currentVibe.textContent = vibe || "(no vibe set)";
+      } catch (err) {
+        console.error(err);
+        currentVibe.textContent = "(error reading vibe)";
+        showStatus("Error reading vibe: " + (err.message || err));
+      }
+    }
+
+    async function setVibe() {
+      try {
+        const v = vibeInput.value.trim();
+        if (!v) {
+          alert("Please enter a vibe first.");
+          return;
+        }
+        setVibeBtn.disabled = true;
+        showStatus("Sending transaction…");
+
+        const tx = await contract.setVibe(v);
+        showStatus("Submitted. Waiting for confirmation… Tx hash: " + tx.hash);
+
+        await tx.wait();
+        showStatus("Vibe updated on-chain.");
+        await loadVibe();
+        vibeInput.value = "";
+      } catch (err) {
+        console.error(err);
+        showStatus("Error: " + (err.data?.message || err.message || err));
+      } finally {
+        setVibeBtn.disabled = false;
+      }
+    }
+
+    connectBtn.addEventListener("click", connect);
+    setVibeBtn.addEventListener("click", setVibe);
+
+    if (window.ethereum) {
+      ethereum.on("accountsChanged", () => window.location.reload());
+      ethereum.on("chainChanged", () => window.location.reload());
+    }
+  </script>
+</body>
+</html>
