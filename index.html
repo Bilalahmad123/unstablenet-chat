@@ -53,7 +53,7 @@
   <script>
     // === Configuration ===
     const CONTRACT_ADDRESS = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
-    const SHARDEUM_CHAIN_ID_HEX = "0x1f90"; // 8080 in hex
+    const SHARDEUM_CHAIN_ID_HEX = "0x1f90"; // 8080 decimal
     const SHARDEUM_PARAMS = {
       chainId: SHARDEUM_CHAIN_ID_HEX,
       chainName: "Shardeum Unstablenet",
@@ -105,7 +105,12 @@
     }
 
     async function connectWallet() {
-      if (!window.ethereum) return alert("MetaMask not detected.");
+      if (typeof window.ethereum === "undefined") {
+        alert("No Web3 wallet detected. Please install MetaMask or similar.");
+        window.open("https://metamask.io/download.html", "_blank");
+        return;
+      }
+
       connectBtn.disabled = true;
       showStatus("Connecting…");
 
@@ -125,10 +130,10 @@
         setVibeBtn.disabled = false;
         await loadVibe();
 
-        showStatus("Connected");
+        showStatus("Connected.");
       } catch (err) {
         console.error(err);
-        showStatus(err.message || "Connection failed");
+        showStatus(err.message || "Connection failed.");
       } finally {
         connectBtn.disabled = false;
       }
@@ -148,7 +153,10 @@
 
     async function setVibe() {
       const v = vibeInput.value.trim();
-      if (!v) return alert("Please enter a vibe!");
+      if (!v) {
+        alert("Please enter a vibe!");
+        return;
+      }
       setVibeBtn.disabled = true;
       showStatus("Sending…");
 
