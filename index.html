@@ -9,10 +9,6 @@
     button { padding: 10px; margin-top: 10px; cursor: pointer; }
     input { padding: 8px; width: 300px; margin-top: 10px; }
     #status { margin-top: 15px; color: yellow; }
-    #pastVibes { margin-top: 20px; padding: 10px; background: #222; border-radius: 5px; }
-    .vibeItem { border-bottom: 1px solid #333; padding: 5px 0; }
-    .vibeItem:last-child { border-bottom: none; }
-    .address { font-size: 12px; color: #aaa; }
   </style>
 </head>
 <body>
@@ -28,9 +24,6 @@
   <button id="setVibeButton">Set Vibe</button>
 
   <div id="status"></div>
-
-  <h3>Past 5 Vibes (from any wallet):</h3>
-  <div id="pastVibes">Not loaded</div>
 
   <script>
     const contractABI = [
@@ -82,7 +75,6 @@
           web3 = new Web3(window.ethereum);
           contract = new web3.eth.Contract(contractABI, contractAddress);
           loadVibe();
-          loadPastVibes();
         } catch (error) {
           console.error(error);
         }
@@ -100,29 +92,6 @@
       }
     }
 
-    async function loadPastVibes() {
-      try {
-        const latestBlock = await web3.eth.getBlockNumber();
-        const fromBlock = Math.max(latestBlock - 500, 0); // search last 500 blocks
-        const events = await contract.getPastEvents("VibeChanged", {
-          fromBlock: fromBlock,
-          toBlock: "latest"
-        });
-        // Take last 5 events, newest first
-        const lastVibes = events.slice(-5).reverse();
-        const vibesHtml = lastVibes.map(ev => `
-          <div class="vibeItem">
-            <div>${ev.returnValues.newVibe}</div>
-            <div class="address">${ev.returnValues.user}</div>
-          </div>
-        `).join("");
-        document.getElementById("pastVibes").innerHTML = vibesHtml || "No vibes found in last 500 blocks.";
-      } catch (err) {
-        console.error("Error loading past vibes:", err);
-        document.getElementById("pastVibes").innerText = "Error loading past vibes.";
-      }
-    }
-
     async function setVibe() {
       const newVibe = document.getElementById("vibeInput").value;
       if (!newVibe) {
@@ -134,7 +103,6 @@
         await contract.methods.setVibe(newVibe).send({ from: userAccount });
         document.getElementById("status").innerText = "Vibe updated!";
         loadVibe();
-        loadPastVibes();
       } catch (err) {
         console.error(err);
         document.getElementById("status").innerText = "Transaction failed.";
@@ -154,7 +122,6 @@
           document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
           contract = new web3.eth.Contract(contractABI, contractAddress);
           loadVibe();
-          loadPastVibes();
         }
       }
     });
