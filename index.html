@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vibe DApp</title>
+  <title>Vibe DApp - Shardeum</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; background: #111; color: #fff; padding: 20px; }
@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-  <h1>Vibe Controller</h1>
+  <h1>Vibe Controller (Shardeum)</h1>
   <button id="connectButton">Connect Wallet</button>
   <button id="disconnectButton" style="display:none;">Disconnect</button>
   <div id="walletAddress"></div>
@@ -84,6 +84,7 @@
           contract = new web3.eth.Contract(contractABI, contractAddress);
           loadVibe();
           loadVibeHistory();
+          subscribeToEvents();
         } catch (error) {
           console.error(error);
         }
@@ -112,9 +113,8 @@
 
     async function loadVibeHistory() {
       try {
-        const latestBlock = await web3.eth.getBlockNumber();
         const events = await contract.getPastEvents("VibeChanged", {
-          fromBlock: latestBlock - 5000, // scan recent 5000 blocks (adjust as needed)
+          fromBlock: 0,   // fetch from the beginning
           toBlock: "latest"
         });
 
@@ -133,7 +133,7 @@
         });
       } catch (err) {
         console.error("Error loading vibe history:", err);
-        document.getElementById("vibeHistory").innerText = "Error loading history";
+        document.getElementById("vibeHistory").innerText = "Error loading history (RPC may not support getLogs)";
       }
     }
 
@@ -155,6 +155,16 @@
       }
     }
 
+    function subscribeToEvents() {
+      if (!contract) return;
+      contract.events.VibeChanged({ fromBlock: "latest" })
+        .on("data", event => {
+          console.log("New vibe event:", event);
+          loadVibeHistory();
+        })
+        .on("error", err => console.error("Subscription error:", err));
+    }
+
     document.getElementById("connectButton").addEventListener("click", connectWallet);
     document.getElementById("disconnectButton").addEventListener("click", disconnectWallet);
     document.getElementById("setVibeButton").addEventListener("click", setVibe);
@@ -172,6 +182,7 @@
           contract = new web3.eth.Contract(contractABI, contractAddress);
           loadVibe();
           loadVibeHistory();
+          subscribeToEvents();
         }
       }
     });
