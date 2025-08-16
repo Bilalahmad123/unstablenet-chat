@@ -2,68 +2,123 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vibe DApp</title>
+  <title>Vibe DApp (Shardeum)</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #111; color: white; padding: 20px; }
+    button, input { padding: 8px; margin: 4px; }
+    .vibe { border-bottom: 1px solid #444; padding: 6px 0; }
+  </style>
 </head>
 <body>
-  <h1>Vibe DApp</h1>
+  <h1>Vibe Controller</h1>
+  <button id="connect">Connect Wallet</button>
+  <button id="disconnect" style="display:none;">Disconnect</button>
+  <div>Account: <span id="account">Not connected</span></div>
 
-  <h2>Last 10 Vibes</h2>
-  <ul id="vibeHistory"></ul>
+  <h3>Current Vibe</h3>
+  <div id="current">Loading...</div>
+
+  <h3>Set Vibe</h3>
+  <input id="vibeInput" placeholder="Enter vibe...">
+  <button id="btnSet">Send</button>
+  <div id="status"></div>
+
+  <h3>Last 10 Vibes</h3>
+  <div id="history">Loading...</div>
 
   <script>
     const contractAddress = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
-    const cycleInfoUrl = "http://34.57.251.44:4000/cycleinfo/1";
-    const web3 = new Web3();
+    const abi = [
+      {"inputs":[{"internalType":"string","name":"_vibe","type":"string"}],"name":"setVibe","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"string","name":"newVibe","type":"string"}],"name":"VibeChanged","type":"event"},
+      {"inputs":[],"name":"getVibe","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"}
+    ];
 
-    async function fetchVibes() {
+    let web3, contract, account;
+
+    async function updateCurrent() {
       try {
-        // 1. get archiver list
-        const res = await fetch(cycleInfoUrl);
-        const cycleData = await res.json();
-        const archiver = cycleData.activeArchivers?.[0];
-        if (!archiver) throw new Error("No archivers found");
-
-        // 2. fetch latest txs
-        const txRes = await fetch(`${archiver}/transactions?limit=100`);
-        const txs = await txRes.json();
-
-        // 3. filter contract txs
-        const vibeTxs = txs.filter(tx => 
-          tx.to?.toLowerCase() === contractAddress.toLowerCase()
-        );
-
-        // 4. decode last 10
-        const ul = document.getElementById("vibeHistory");
-        ul.innerHTML = "";
-
-        if (vibeTxs.length === 0) {
-          ul.innerHTML = "<li>No vibes yet.</li>";
-          return;
-        }
-
-        vibeTxs.slice(-10).reverse().forEach(tx => {
-          try {
-            // skip function selector (4 bytes = 8 hex chars after '0x')
-            const data = tx.data;
-            if (data && data.startsWith("0x")) {
-              const decoded = web3.eth.abi.decodeParameters(["string"], "0x" + data.slice(10));
-              const li = document.createElement("li");
-              li.textContent = decoded[0];
-              ul.appendChild(li);
-            }
-          } catch (err) {
-            console.warn("decode fail", err);
-          }
-        });
-
-      } catch (err) {
-        document.getElementById("vibeHistory").innerHTML = "<li>Error fetching vibes</li>";
-        console.error(err);
+        const val = await contract.methods.getVibe().call();
+        document.getElementById("current").innerText = val || "No vibes set yet";
+      } catch {
+        document.getElementById("current").innerText = "Error";
       }
     }
 
-    fetchVibes();
+    async function updateHistory() {
+      const hist = document.getElementById("history");
+      hist.innerText = "Loading...";
+      try {
+        const events = await contract.getPastEvents("VibeChanged", { fromBlock: 0, toBlock: "latest" });
+        if (!events.length) {
+          hist.innerText = "No vibes yet";
+          return;
+        }
+        const last10 = events.slice(-10).reverse();
+        hist.innerHTML = last10.map(ev => `<div class="vibe"><b>${ev.returnValues.user}</b> → "${ev.returnValues.newVibe}"</div>`).join("");
+      } catch {
+        hist.innerText = "Error loading history";
+      }
+    }
+
+    async function connectWallet() {
+      if (!window.ethereum) return alert("Install MetaMask");
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const net = await window.ethereum.request({ method: 'eth_chainId' });
+      if (net !== "0x1F90") { // Chain ID 8080 decimal = 0x1F90 hex
+        alert("Switch MetaMask to Shardeum Unstablenet (Chain ID 8080)");
+      }
+      web3 = new Web3(window.ethereum);
+      contract = new web3.eth.Contract(abi, contractAddress);
+      account = (await web3.eth.getAccounts())[0];
+      document.getElementById("account").innerText = account;
+      document.getElementById("connect").style.display = "none";
+      document.getElementById("disconnect").style.display = "inline-block";
+      updateCurrent();
+      updateHistory();
+    }
+
+    document.getElementById("disconnect").onclick = () => {
+      account = null;
+      document.getElementById("account").innerText = "Not connected";
+      document.getElementById("connect").style.display = "inline-block";
+      document.getElementById("disconnect").style.display = "none";
+    };
+
+    document.getElementById("btnSet").onclick = async () => {
+      if (!account) return alert("Connect wallet first");
+      const vibe = document.getElementById("vibeInput").value;
+      if (!vibe) return alert("Enter a vibe");
+      document.getElementById("status").innerText = "Sending...";
+      try {
+        await contract.methods.setVibe(vibe).send({ from: account });
+        document.getElementById("status").innerText = "Sent!";
+        document.getElementById("vibeInput").value = "";
+        updateCurrent();
+        updateHistory();
+      } catch {
+        document.getElementById("status").innerText = "Failed";
+      }
+    };
+
+    document.getElementById("connect").onclick = connectWallet;
+
+    window.addEventListener('load', async () => {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        contract = new web3.eth.Contract(abi, contractAddress);
+        const accs = await web3.eth.getAccounts();
+        if (accs.length) {
+          account = accs[0];
+          document.getElementById("account").innerText = account;
+          document.getElementById("connect").style.display = "none";
+          document.getElementById("disconnect").style.display = "inline-block";
+          updateCurrent();
+          updateHistory();
+        }
+      }
+    });
   </script>
 </body>
 </html>
