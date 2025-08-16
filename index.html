@@ -9,14 +9,12 @@
     button { padding: 10px; margin-top: 10px; cursor: pointer; }
     input { padding: 8px; width: 300px; margin-top: 10px; }
     #status { margin-top: 15px; color: yellow; }
-    #lastVibes { margin-top: 15px; }
-    .vibe-entry { border-bottom: 1px solid #333; padding: 5px 0; }
   </style>
 </head>
 <body>
   <h1>Vibe Controller</h1>
   <button id="connectButton">Connect Wallet</button>
-  <button id="disconnectButton">Disconnect</button>
+  <button id="disconnectButton" style="display:none;">Disconnect</button>
   <div id="walletAddress"></div>
 
   <h3>Current Vibe:</h3>
@@ -26,10 +24,10 @@
   <input type="text" id="vibeInput" placeholder="Enter new vibe...">
   <button id="setVibeButton">Set Vibe</button>
 
-  <div id="status"></div>
-
   <h3>Last 10 Vibes:</h3>
-  <div id="lastVibes">Loading...</div>
+  <ul id="lastVibes"><li>Loading...</li></ul>
+
+  <div id="status"></div>
 
   <script>
     const contractABI = [
@@ -77,6 +75,9 @@
           const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
           userAccount = accounts[0];
           document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
+          document.getElementById("connectButton").style.display = "none";
+          document.getElementById("disconnectButton").style.display = "inline-block";
+
           web3 = new Web3(window.ethereum);
           contract = new web3.eth.Contract(contractABI, contractAddress);
           loadVibe();
@@ -91,7 +92,9 @@
 
     function disconnectWallet() {
       userAccount = null;
-      document.getElementById("walletAddress").innerText = "Disconnected";
+      document.getElementById("walletAddress").innerText = "";
+      document.getElementById("connectButton").style.display = "inline-block";
+      document.getElementById("disconnectButton").style.display = "none";
     }
 
     async function loadVibe() {
@@ -124,48 +127,32 @@
     async function loadLastVibes() {
       try {
         const latestBlock = await web3.eth.getBlockNumber();
-        const logs = await web3.eth.getPastLogs({
-          fromBlock: latestBlock - 5000,  // scan last ~5000 blocks
-          toBlock: 'latest',
-          address: contractAddress,
-          topics: [web3.utils.sha3("VibeChanged(address,string)")]
+        const events = await contract.getPastEvents("VibeChanged", {
+          fromBlock: latestBlock - 5000, 
+          toBlock: "latest"
         });
 
-        if (!logs.length) {
-          document.getElementById("lastVibes").innerText = "No vibes yet";
+        if (events.length === 0) {
+          document.getElementById("lastVibes").innerHTML = "<li>No vibes yet</li>";
           return;
         }
 
-        const decoded = logs.map(l => contract._decodeEventABI.call({ name: "VibeChanged", jsonInterface: contract.options.jsonInterface.find(x=>x.name==="VibeChanged") }, l));
-        
-        const last10 = decoded.slice(-10).reverse();
-        const html = last10.map(ev => 
-          `<div class="vibe-entry"><b>${ev.returnValues.user}</b>: ${ev.returnValues.newVibe}</div>`
-        ).join("");
+        const last10 = events.slice(-10).reverse();
+        let html = "";
+        last10.forEach(ev => {
+          html += `<li><b>${ev.returnValues.user}</b>: ${ev.returnValues.newVibe}</li>`;
+        });
+
         document.getElementById("lastVibes").innerHTML = html;
       } catch (err) {
-        console.error("Error fetching last vibes:", err);
-        document.getElementById("lastVibes").innerText = "Error loading vibes";
+        console.error("Error fetching vibes:", err);
+        document.getElementById("lastVibes").innerHTML = "<li>Error loading vibes</li>";
       }
     }
 
     document.getElementById("connectButton").addEventListener("click", connectWallet);
     document.getElementById("disconnectButton").addEventListener("click", disconnectWallet);
     document.getElementById("setVibeButton").addEventListener("click", setVibe);
-
-    window.addEventListener('load', async () => {
-      if (window.ethereum) {
-        web3 = new Web3(window.ethereum);
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-          userAccount = accounts[0];
-          document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
-          contract = new web3.eth.Contract(contractABI, contractAddress);
-          loadVibe();
-          loadLastVibes();
-        }
-      }
-    });
   </script>
 </body>
 </html>
