@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vibe DApp – Shardeum Unstablenet</title>
+  <title>Vibe DApp – Shardeum</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; background: #111; color: #fff; padding: 20px; }
@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-  <h1>Vibe Controller (Shardeum Unstablenet)</h1>
+  <h1>Vibe Controller (Shardeum)</h1>
   <button id="connectButton">Connect Wallet</button>
   <button id="disconnectButton" style="display:none;">Disconnect</button>
   <div id="walletAddress"></div>
@@ -31,9 +31,42 @@
   <div id="vibeHistory">Loading...</div>
 
   <script>
-    const contractABI = [ /* same ABI as before */ ];
+    const contractABI = [
+      {
+        "inputs": [{"internalType": "string","name": "_vibe","type": "string"}],
+        "name": "setVibe",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {"indexed": true,"internalType": "address","name": "user","type": "address"},
+          {"indexed": false,"internalType": "string","name": "newVibe","type": "string"}
+        ],
+        "name": "VibeChanged",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "getVibe",
+        "outputs": [{"internalType": "string","name": "","type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "vibe",
+        "outputs": [{"internalType": "string","name": "","type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ];
+
     const contractAddress = "0xF16D12Bb3703C472F8c22c0C2A7EAF072fe1Bc9c";
-    const explorerApiBase = "https://explorer-unstable.shardeum.org/api"; // placeholder
+    // 👇 Replace this with the actual explorer API endpoint format you see in dev tools
+    const explorerApiBase = "https://explorer-unstable.shardeum.org/api"; 
 
     let web3, contract, userAccount;
 
@@ -50,7 +83,6 @@
 
       loadVibe();
       loadVibeHistory();
-      subscribeToEvents();
     }
 
     function disconnectWallet() {
@@ -63,67 +95,38 @@
     }
 
     async function loadVibe() {
-      const vibe = await contract.methods.getVibe().call();
-      document.getElementById("currentVibe").innerText = vibe || "No vibe set yet";
+      try {
+        const vibe = await contract.methods.getVibe().call();
+        document.getElementById("currentVibe").innerText = vibe || "No vibe set yet";
+      } catch (e) {
+        console.error("Error fetching vibe:", e);
+        document.getElementById("currentVibe").innerText = "Error loading vibe";
+      }
     }
 
     async function loadVibeHistory() {
       document.getElementById("vibeHistory").innerText = "Loading history...";
       try {
-        // First: try RPC
-        const events = await contract.getPastEvents("VibeChanged", {
-          fromBlock: 0, toBlock: "latest"
-        });
-        if (events.length) {
-          renderEvents(events.slice(-10).reverse());
-          return;
-        }
-      } catch (e) {
-        console.error("RPC logs failed:", e);
-      }
-
-      // Fallback: Explorer API
-      try {
         const url = `${explorerApiBase}/events?address=${contractAddress}&event=VibeChanged&limit=10`;
         const resp = await fetch(url);
         const data = await resp.json();
+
+        const historyDiv = document.getElementById("vibeHistory");
+        historyDiv.innerHTML = "";
         if (Array.isArray(data) && data.length) {
-          renderExplorerEvents(data);
+          data.forEach(ev => {
+            const item = document.createElement("div");
+            item.className = "vibeItem";
+            item.innerText = `${ev.user || ev.args?.user} → "${ev.newVibe || ev.args?.newVibe}"`;
+            historyDiv.appendChild(item);
+          });
         } else {
-          document.getElementById("vibeHistory").innerText = "No vibes yet (via explorer)";
+          historyDiv.innerText = "No vibes yet";
         }
       } catch (err) {
         console.error("Explorer API failed:", err);
         document.getElementById("vibeHistory").innerText = "Error loading history";
       }
-    }
-
-    function renderEvents(events) {
-      const container = document.getElementById("vibeHistory");
-      container.innerHTML = "";
-      events.forEach(e => {
-        const item = document.createElement("div");
-        item.className = "vibeItem";
-        item.innerText = `${e.returnValues.user} → "${e.returnValues.newVibe}"`;
-        container.appendChild(item);
-      });
-    }
-
-    function renderExplorerEvents(list) {
-      const container = document.getElementById("vibeHistory");
-      container.innerHTML = "";
-      list.forEach(ev => {
-        const item = document.createElement("div");
-        item.className = "vibeItem";
-        item.innerText = `${ev.user} → "${ev.newVibe}"`;
-        container.appendChild(item);
-      });
-    }
-
-    function subscribeToEvents() {
-      contract.events.VibeChanged({ fromBlock: "latest" })
-        .on("data", () => loadVibeHistory())
-        .on("error", console.error);
     }
 
     async function setVibe() {
@@ -144,6 +147,7 @@
     document.getElementById("connectButton").addEventListener("click", connectWallet);
     document.getElementById("disconnectButton").addEventListener("click", disconnectWallet);
     document.getElementById("setVibeButton").addEventListener("click", setVibe);
+
     window.addEventListener('load', async () => {
       if (!window.ethereum) return;
       web3 = new Web3(window.ethereum);
@@ -156,7 +160,6 @@
       contract = new web3.eth.Contract(contractABI, contractAddress);
       loadVibe();
       loadVibeHistory();
-      subscribeToEvents();
     });
   </script>
 </body>
