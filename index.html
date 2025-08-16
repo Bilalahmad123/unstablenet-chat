@@ -9,14 +9,14 @@
     button { padding: 10px; margin-top: 10px; cursor: pointer; }
     input { padding: 8px; width: 300px; margin-top: 10px; }
     #status { margin-top: 15px; color: yellow; }
-    #lastVibes { margin-top: 20px; }
-    .vibe-item { margin: 5px 0; padding: 5px; border-bottom: 1px solid #444; }
+    #lastVibes { margin-top: 15px; }
+    .vibe-entry { border-bottom: 1px solid #333; padding: 5px 0; }
   </style>
 </head>
 <body>
   <h1>Vibe Controller</h1>
   <button id="connectButton">Connect Wallet</button>
-  <button id="disconnectButton" style="display:none;">Disconnect</button>
+  <button id="disconnectButton">Disconnect</button>
   <div id="walletAddress"></div>
 
   <h3>Current Vibe:</h3>
@@ -55,6 +55,13 @@
         "outputs": [{"internalType": "string","name": "","type": "string"}],
         "stateMutability": "view",
         "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "vibe",
+        "outputs": [{"internalType": "string","name": "","type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
       }
     ];
 
@@ -70,8 +77,6 @@
           const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
           userAccount = accounts[0];
           document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
-          document.getElementById("connectButton").style.display = "none";
-          document.getElementById("disconnectButton").style.display = "inline-block";
           web3 = new Web3(window.ethereum);
           contract = new web3.eth.Contract(contractABI, contractAddress);
           loadVibe();
@@ -86,9 +91,7 @@
 
     function disconnectWallet() {
       userAccount = null;
-      document.getElementById("walletAddress").innerText = "";
-      document.getElementById("connectButton").style.display = "inline-block";
-      document.getElementById("disconnectButton").style.display = "none";
+      document.getElementById("walletAddress").innerText = "Disconnected";
     }
 
     async function loadVibe() {
@@ -97,7 +100,6 @@
         document.getElementById("currentVibe").innerText = vibe || "No vibe set yet";
       } catch (err) {
         console.error("Error loading vibe:", err);
-        document.getElementById("currentVibe").innerText = "Error loading vibe";
       }
     }
 
@@ -121,37 +123,29 @@
 
     async function loadLastVibes() {
       try {
-        const res = await fetch(`https://explorer-unstable.shardeum.org/api/transaction?contractAddress=${contractAddress}`);
-        const data = await res.json();
-        let vibes = [];
+        const latestBlock = await web3.eth.getBlockNumber();
+        const logs = await web3.eth.getPastLogs({
+          fromBlock: latestBlock - 5000,  // scan last ~5000 blocks
+          toBlock: 'latest',
+          address: contractAddress,
+          topics: [web3.utils.sha3("VibeChanged(address,string)")]
+        });
 
-        if (data && data.transactions) {
-          for (let tx of data.transactions) {
-            if (tx.input && tx.input.includes("setVibe")) {
-              vibes.push({
-                user: tx.from,
-                vibe: tx.input // Raw input — ideally decode
-              });
-            }
-          }
+        if (!logs.length) {
+          document.getElementById("lastVibes").innerText = "No vibes yet";
+          return;
         }
 
-        const last10 = vibes.slice(-10).reverse();
-        const vibesDiv = document.getElementById("lastVibes");
-        if (last10.length === 0) {
-          vibesDiv.innerText = "No vibes yet";
-        } else {
-          vibesDiv.innerHTML = "";
-          last10.forEach(v => {
-            const el = document.createElement("div");
-            el.className = "vibe-item";
-            el.innerText = v.user + " → " + v.vibe;
-            vibesDiv.appendChild(el);
-          });
-        }
+        const decoded = logs.map(l => contract._decodeEventABI.call({ name: "VibeChanged", jsonInterface: contract.options.jsonInterface.find(x=>x.name==="VibeChanged") }, l));
+        
+        const last10 = decoded.slice(-10).reverse();
+        const html = last10.map(ev => 
+          `<div class="vibe-entry"><b>${ev.returnValues.user}</b>: ${ev.returnValues.newVibe}</div>`
+        ).join("");
+        document.getElementById("lastVibes").innerHTML = html;
       } catch (err) {
         console.error("Error fetching last vibes:", err);
-        document.getElementById("lastVibes").innerText = "Error fetching vibes";
+        document.getElementById("lastVibes").innerText = "Error loading vibes";
       }
     }
 
@@ -166,8 +160,6 @@
         if (accounts.length > 0) {
           userAccount = accounts[0];
           document.getElementById("walletAddress").innerText = "Connected: " + userAccount;
-          document.getElementById("connectButton").style.display = "none";
-          document.getElementById("disconnectButton").style.display = "inline-block";
           contract = new web3.eth.Contract(contractABI, contractAddress);
           loadVibe();
           loadLastVibes();
